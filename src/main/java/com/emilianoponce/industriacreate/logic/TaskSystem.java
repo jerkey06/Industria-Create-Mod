@@ -22,7 +22,7 @@ import java.util.UUID;
 public class TaskSystem {
     private static final Logger LOGGER = LoggerFactory.getLogger(TaskSystem.class);
     private static final Map<UUID, Task> ACTIVE_TASKS = new HashMap<>();
-    
+
     /**
      * Task types that workers can perform
      */
@@ -32,7 +32,7 @@ public class TaskSystem {
         OPERATE_MACHINE,
         ACTIVATE_MECHANISM
     }
-    
+
     /**
      * Represents a task that can be assigned to a worker
      */
@@ -42,7 +42,7 @@ public class TaskSystem {
         private final BlockPos targetPos;
         private final String description;
         private boolean completed;
-        
+
         public Task(TaskType type, BlockPos startPos, BlockPos targetPos, String description) {
             this.type = type;
             this.startPos = startPos;
@@ -50,32 +50,32 @@ public class TaskSystem {
             this.description = description;
             this.completed = false;
         }
-        
+
         public TaskType getType() {
             return type;
         }
-        
+
         public BlockPos getStartPos() {
             return startPos;
         }
-        
+
         public BlockPos getTargetPos() {
             return targetPos;
         }
-        
+
         public String getDescription() {
             return description;
         }
-        
+
         public boolean isCompleted() {
             return completed;
         }
-        
+
         public void setCompleted(boolean completed) {
             this.completed = completed;
         }
     }
-    
+
     /**
      * Assigns a task to a worker
      * @param worker The worker to assign the task to
@@ -87,7 +87,7 @@ public class TaskSystem {
         worker.setTargetPos(task.getTargetPos());
         LOGGER.info("Assigned task {} to worker {}", task.getType(), worker.getUUID());
     }
-    
+
     /**
      * Gets the current task for a worker
      * @param worker The worker to get the task for
@@ -96,7 +96,7 @@ public class TaskSystem {
     public static Task getTask(WorkerVillagerEntity worker) {
         return ACTIVE_TASKS.get(worker.getUUID());
     }
-    
+
     /**
      * Completes a task for a worker
      * @param worker The worker whose task is completed
@@ -106,28 +106,28 @@ public class TaskSystem {
         if (task != null) {
             task.setCompleted(true);
             LOGGER.info("Worker {} completed task {}", worker.getUUID(), task.getType());
-            
+
             // Reward the worker for completing the task
             worker.increaseMotivation(10);
-            
+
             // Remove the task
             ACTIVE_TASKS.remove(worker.getUUID());
             worker.setTask("idle");
         }
     }
-    
+
     /**
      * Goal for workers to move to their assigned task location
      */
     public static class MoveToTaskGoal extends MoveToBlockGoal {
         private final WorkerVillagerEntity worker;
-        
+
         public MoveToTaskGoal(WorkerVillagerEntity worker, double speedModifier) {
             super(worker, speedModifier, 16, 5);
             this.worker = worker;
             this.setFlags(EnumSet.of(Goal.Flag.MOVE));
         }
-        
+
         @Override
         protected boolean isValidTarget(LevelReader level, BlockPos pos) {
             Task task = getTask(worker);
@@ -136,7 +136,7 @@ public class TaskSystem {
             }
             return false;
         }
-        
+
         @Override
         public boolean canUse() {
             Task task = getTask(worker);
@@ -146,11 +146,11 @@ public class TaskSystem {
             }
             return false;
         }
-        
+
         @Override
         public void tick() {
             super.tick();
-            
+
             Task task = getTask(worker);
             if (task != null && !task.isCompleted()) {
                 if (this.isReachedTarget()) {
@@ -158,23 +158,30 @@ public class TaskSystem {
                     switch (task.getType()) {
                         case TRANSPORT:
                             // TODO: Implement item transport logic
+                            completeTask(worker);
                             break;
                         case OPERATE_MACHINE:
-                            // TODO: Implement machine operation logic
+                            // Use the CreateMechanismHandler to operate the machine
+                            if (CreateMechanismHandler.interactWithMechanism(worker, task.getTargetPos())) {
+                                LOGGER.info("Worker {} successfully operated machine at {}", worker.getUUID(), task.getTargetPos());
+                                completeTask(worker);
+                            }
                             break;
                         case ACTIVATE_MECHANISM:
-                            // TODO: Implement mechanism activation logic
+                            // Use the CreateMechanismHandler to activate the mechanism
+                            if (CreateMechanismHandler.interactWithMechanism(worker, task.getTargetPos())) {
+                                LOGGER.info("Worker {} successfully activated mechanism at {}", worker.getUUID(), task.getTargetPos());
+                                completeTask(worker);
+                            }
                             break;
                         default:
+                            completeTask(worker);
                             break;
                     }
-                    
-                    // For now, just complete the task when the worker reaches the target
-                    completeTask(worker);
                 }
             }
         }
-        
+
         @Override
         protected boolean isReachedTarget() {
             return this.worker.distanceToSqr(this.blockPos.getX() + 0.5D, this.blockPos.getY() + 0.5D, this.blockPos.getZ() + 0.5D) < 2.0D;
